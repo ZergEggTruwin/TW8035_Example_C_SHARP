@@ -38,6 +38,11 @@ namespace TW8035_C_SHARP
         float gOffset = 0;
 
         float[] lpfArr = new float[4800];
+        bool firstRecv = false;
+
+        float min = 0;
+        float max = 0;
+        int recvCnt = 0;
 
         public Form1()
         {
@@ -83,9 +88,9 @@ namespace TW8035_C_SHARP
             switch (m.Msg)
             {
                 case WM_COMM_RX_DATA: // Raw Data 수신
+                    
                     TW_8035_ImageData twImage = (TW_8035_ImageData)Marshal.PtrToStructure(m.LParam, typeof(TW_8035_ImageData));
 
-                    float max, min, avg;
                     float before;
 
                     float[] fArr = new float[4800];
@@ -99,7 +104,17 @@ namespace TW8035_C_SHARP
                     gOffset = Properties.Settings.Default.OFFSET;
 
                     // Raw data to temperature
-                    fArr = GenerateTempData(twImage.ImageData, twImage.T_Data1, twImage.T_Data2, twImage.T_Data3, out min, out max, out before);
+                    fArr = GenerateTempData(twImage.ImageData, twImage.T_Data1, twImage.T_Data2, twImage.T_Data3, out before);
+
+                    recvCnt++;
+
+                    // 이미지 번쩍거림을 제거하기 위하여 Min, Max값은 1초에 한번만 계산
+                    if((min == 0 && max == 0) || twImage.FPS == recvCnt)
+                    {
+                        min = fArr.Min();
+                        max = fArr.Max();
+                        recvCnt = 0;
+                    }
 
                     textRecvCnt.Text = twImage.cnt + "";
                     textFPS.Text = twImage.FPS + "";
@@ -111,12 +126,21 @@ namespace TW8035_C_SHARP
                     // Temperature Data to Bitmap
                     Bitmap bmp;
 
-                    if (checkBox1.Checked == true) // 이미지 반짝거림을 제거하기 위한 Low Pass Filter 사용
+                    if (checkBox1.Checked == true) // 이미지 지글거림을 제거하기 위한 Low Pass Filter 사용
                     {
-                        for (int i = 0; i < 4800; i++)
+                        if(firstRecv == false)
                         {
-                            lpfArr[i] = lpfArr[i] * 0.7f + fArr[i] * 0.3f;
+                            Array.Copy(fArr, lpfArr, 4800);
+                            firstRecv = true;
                         }
+                        else
+                        {
+                            for (int i = 0; i < 4800; i++)
+                            {
+                                lpfArr[i] = lpfArr[i] * 0.7f + fArr[i] * 0.3f;
+                            }
+                        }
+
                         bmp = Generate16bitImage(lpfArr, min, max, maxIdx);
                     }
                     else // Low Pass Filter 사용 안함
@@ -267,11 +291,9 @@ namespace TW8035_C_SHARP
         /// <param name="t1">TR3530_Specification_Rev8 문서 7페이지 참고</param>
         /// <param name="t2">TR3530_Specification_Rev8 문서 7페이지 참고</param>
         /// <param name="t3">TR3530_Specification_Rev8 문서 7페이지 참고</param>
-        /// <param name="min">변환된 온도 중 최저값</param>
-        /// <param name="max">변환된 온도 중 최대값</param>
         /// <param name="before">방사율이 적용되기 전의 최대값</param>
         /// <returns>온도 배열[4800]</returns>
-        private float[] GenerateTempData(ushort[] arr, ushort t1, ushort t2, ushort t3, out float min, out float max, out float before)
+        private float[] GenerateTempData(ushort[] arr, ushort t1, ushort t2, ushort t3, out float before)
         {
             float[] rtnVal = new float[4800];
 
@@ -282,8 +304,6 @@ namespace TW8035_C_SHARP
                 rtnVal[i] = (((gainDT * (arr[i] - t1) + t3)) + radioOffset) / gE + gOffset;
             }
 
-            min = rtnVal.Min();
-            max = rtnVal.Max();
             before = (max - gOffset) * gE;
 
             return rtnVal;
@@ -308,6 +328,8 @@ namespace TW8035_C_SHARP
             }
             else
             {
+                firstRecv = false;
+
                 String portName = comboPort.SelectedItem.ToString();
                 btnConn.Text = "Disconnect";
 
