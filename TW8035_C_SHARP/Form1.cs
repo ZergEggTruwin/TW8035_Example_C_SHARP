@@ -5,6 +5,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO.Ports;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -36,6 +37,8 @@ namespace TW8035_C_SHARP
         float gE = 0;
         float gOffset = 0;
 
+        float[] lpfArr = new float[4800];
+
         public Form1()
         {
             InitializeComponent();
@@ -45,8 +48,10 @@ namespace TW8035_C_SHARP
             //    colorBaseArr[i] = Color.FromArgb(i, i, i);
             //}
 
+            // 컬러 막대기 변경
             comboBox1.SelectedIndex = 0;
 
+            // 방사율 재계산
             buildEmissivityList();
         }
 
@@ -54,13 +59,7 @@ namespace TW8035_C_SHARP
         {
             hr = new HandleRef(this, this.Handle);
 
-            IntPtr ip = new IntPtr();
-
-            ip = getPortListForCSharp(1);
-
-            String str1 = Marshal.PtrToStringUni(ip);
-
-            String[] stk = str1.Split('|');
+            String[] stk = SerialPort.GetPortNames();
 
             int i = 0;
 
@@ -75,11 +74,15 @@ namespace TW8035_C_SHARP
             }
         }
 
+        /// <summary>
+        /// 윈도우 메세지 수신 이벤트 핸들러
+        /// </summary>
+        /// <param name="m"></param>
         protected override void WndProc(ref Message m)
         {
             switch (m.Msg)
             {
-                case WM_COMM_RX_DATA:
+                case WM_COMM_RX_DATA: // Raw Data 수신
                     TW_8035_ImageData twImage = (TW_8035_ImageData)Marshal.PtrToStructure(m.LParam, typeof(TW_8035_ImageData));
 
                     float max, min, avg;
@@ -87,12 +90,15 @@ namespace TW8035_C_SHARP
 
                     float[] fArr = new float[4800];
 
+                    // 장치에 저장된 오프셋값 계산
                     gainValue = (byte)(twImage.RadioOffset >> 8);
                     radioOffset = ((twImage.RadioOffset & 0xFF) - 120.0f) / 10.0f;
 
+                    // 뷰어에 저장된 Gain값 계산
                     gE = calEmissivity((twImage.TempBoard / 100.0f) - 10.0f);
                     gOffset = Properties.Settings.Default.OFFSET;
 
+                    // Raw data to temperature
                     fArr = GenerateTempData(twImage.ImageData, twImage.T_Data1, twImage.T_Data2, twImage.T_Data3, out min, out max, out before);
 
                     textRecvCnt.Text = twImage.cnt + "";
@@ -102,41 +108,35 @@ namespace TW8035_C_SHARP
 
                     int maxIdx = fArr.ToList().IndexOf(max);
 
-                    Bitmap bmp = Generate16bitImage(fArr, min, max, maxIdx);
+                    // Temperature Data to Bitmap
+                    Bitmap bmp;
 
+                    if (checkBox1.Checked == true) // 이미지 반짝거림을 제거하기 위한 Low Pass Filter 사용
+                    {
+                        for (int i = 0; i < 4800; i++)
+                        {
+                            lpfArr[i] = lpfArr[i] * 0.7f + fArr[i] * 0.3f;
+                        }
+                        bmp = Generate16bitImage(lpfArr, min, max, maxIdx);
+                    }
+                    else // Low Pass Filter 사용 안함
+                    {
+                        bmp = Generate16bitImage(fArr, min, max, maxIdx);
+                    }
+
+                    // UI 표시
                     pictureBox1.Image = bmp;
 
+                    // 방사율 창이 열려 있다면 
+                    // 그래프 및 온도 데이터를 Refresh
                     if(eForm != null && eForm.Visible == true)
                     {
                         eForm.updateTemp(twImage.TempBoard / 100.0f, before, max);
                     }
 
                     break;
-                case WM_COMM_RECV_INFO:
+                case WM_COMM_RECV_INFO: // 장치 정보 수신
                     TW_8035_DeviceData twCal = (TW_8035_DeviceData)Marshal.PtrToStructure(m.LParam, typeof(TW_8035_DeviceData));
-                    break;
-                case WM_COMM_RX_TEMP_DATA:
-                    TW_8035_TempData twTemp = (TW_8035_TempData)Marshal.PtrToStructure(m.LParam, typeof(TW_8035_TempData));
-                    float maxT, minT, avgT;
-                    minT = twTemp.TempData.Min();
-                    maxT = twTemp.TempData.Max();
-                    avgT = twTemp.TempData.Average();
-
-                    textRecvCnt.Text = twTemp.cnt + "";
-                    textFPS.Text = twTemp.FPS + "";
-                    textMax.Text = maxT + "";
-                    textMin.Text = minT + "";
-
-                    int maxTIdx = twTemp.TempData.ToList().IndexOf(maxT);
-
-                    Bitmap bmpT = Generate16bitImage(twTemp.TempData, minT, maxT, maxTIdx);
-
-                    pictureBox1.Image = bmpT;
-
-                    //if (eForm != null && eForm.Visible == true)
-                    //{
-                    //    eForm.updateTemp(twTemp.TempBoard / 100.0f);
-                    //}
                     break;
             }
             base.WndProc(ref m);
@@ -154,6 +154,9 @@ namespace TW8035_C_SHARP
             });
         }
 
+        /// <summary>
+        /// 방사율 재계산
+        /// </summary>
         public void buildEmissivityList()
         {
             list = new List<EmissivityElement>();
@@ -169,6 +172,11 @@ namespace TW8035_C_SHARP
             Add(Properties.Settings.Default.E_350, 35f);
         }
 
+        /// <summary>
+        /// 온도에 따라 변화하는 Gain값을 계산하기 위한 함수
+        /// </summary>
+        /// <param name="temp">T.Shutter - 10도</param>
+        /// <returns>계산된 Gain</returns>
         public float calEmissivity(float temp)
         {
             float rtnVal = 0.0f;
@@ -207,6 +215,14 @@ namespace TW8035_C_SHARP
             return rtnVal;
         }
 
+        /// <summary>
+        /// 온도 데이터를 비트맵으로 변환
+        /// </summary>
+        /// <param name="arr">온도데이터가 들어가있는 배열(80*60)</param>
+        /// <param name="min">Bitmap에서 가장 낮은 온도로 표시할 온도</param>
+        /// <param name="max">Bitmap에서 가장 높은 온도로 표시할 온도</param>
+        /// <param name="targetIdx">최대지점 인덱스</param>
+        /// <returns>비트맵</returns>
         private Bitmap Generate16bitImage(float[] arr, float min, float max, int targetIdx)
         {
             Bitmap rtnVal = new Bitmap(80, 60, PixelFormat.Format24bppRgb);
@@ -244,6 +260,17 @@ namespace TW8035_C_SHARP
             return rtnVal;
         }
 
+        /// <summary>
+        /// 장치에서 넘어온 데이터를 온도데이터로 변환하기 위한 함수
+        /// </summary>
+        /// <param name="arr">장치에서 넘어온 데이터</param>
+        /// <param name="t1">TR3530_Specification_Rev8 문서 7페이지 참고</param>
+        /// <param name="t2">TR3530_Specification_Rev8 문서 7페이지 참고</param>
+        /// <param name="t3">TR3530_Specification_Rev8 문서 7페이지 참고</param>
+        /// <param name="min">변환된 온도 중 최저값</param>
+        /// <param name="max">변환된 온도 중 최대값</param>
+        /// <param name="before">방사율이 적용되기 전의 최대값</param>
+        /// <returns>온도 배열[4800]</returns>
         private float[] GenerateTempData(ushort[] arr, ushort t1, ushort t2, ushort t3, out float min, out float max, out float before)
         {
             float[] rtnVal = new float[4800];
@@ -291,6 +318,10 @@ namespace TW8035_C_SHARP
             }
         }
 
+        /// <summary>
+        /// 이미지 막대기 및 컬러 배열 재생성
+        /// </summary>
+        /// <param name="idx">ComboBox 인덱스</param>
         public void drawImageBar(int idx)
         {
             Bitmap bmp = new Bitmap(20, colorArrCnt, PixelFormat.Format24bppRgb);
@@ -526,6 +557,9 @@ namespace TW8035_C_SHARP
             pictureBox2.Image = bmp;
         }
 
+        /// <summary>
+        /// 접속시도
+        /// </summary>
         private void Run()
         {
             // 멈춤명령
@@ -570,16 +604,6 @@ namespace TW8035_C_SHARP
         private void btn30FPS_Click(object sender, EventArgs e)
         {
             changeFPSCmd((char)30);
-        }
-
-        private void button3_Click(object sender, EventArgs e)
-        {
-            sendMode(SEND_RAW);
-        }
-
-        private void button4_Click(object sender, EventArgs e)
-        {
-            sendMode(SEND_TEMP);
         }
 
         private void button2_Click(object sender, EventArgs e)
