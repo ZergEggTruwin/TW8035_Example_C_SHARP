@@ -12,7 +12,9 @@ C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW803
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.pdb
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\bin\Debug\TW8035_C_SHARP.exe
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\bin\Debug\TW8035_C_SHARP.pdb
-C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.csprojResolveAssemblyReference.cache
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.Form1.resources
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.Properties.Resources.resources
 C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.csproj.GenerateResource.Cache
+C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.csprojAssemblyReference.cache
+C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.E_Form.resources
+C:\Users\User\Desktop\TW8035_Example_C_SHARP\TW8035_Example_C_SHARP-master\TW8035_C_SHARP\obj\Debug\TW8035_C_SHARP.csproj.CoreCompileInputs.cache
